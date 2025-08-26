@@ -3,12 +3,19 @@ from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon, QCursor
 from PIL import Image, ImageDraw, ImageFont
 
+# ===== 工具函数：获取资源路径 =====
+def resource_path(relative_path):
+    """获取资源文件路径，兼容开发环境和 PyInstaller 打包"""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 # ===== 基本配置 =====
 W, H = 2560, 1440
-BASE_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
-OUT = os.path.join(BASE_DIR, "output.jpg")
-FONT_PATH = os.path.join(BASE_DIR, "simhei.ttf")
-QUOTES_PATH = os.path.join(BASE_DIR, "mao_quotes.json")
+OUT = os.path.join(os.path.abspath("."), "output.jpg")
+FONT_PATH = resource_path("simhei.ttf")
+QUOTES_PATH = resource_path("mao_quotes.json")
+ICON_PATH = resource_path("tray.ico")
 
 # 主色候选
 COLORS = [
@@ -39,7 +46,7 @@ def draw_layered_waves(draw, base_rgb):
 
     for i in range(num_layers):
         color = adjust_color(base_rgb, 1 - i*0.06)
-        alpha = min(255, 25 + i*38)
+        alpha = min(255, 25 + i*38)   # 顶层更透明，底层更深
         fill = (*color, alpha)
 
         wavelength = base_wavelength * (1.0 + i*0.03)
@@ -60,9 +67,11 @@ def pick_text():
     try:
         with open(QUOTES_PATH, encoding="utf-8") as f:
             quotes = json.load(f)
-        return random.choice(quotes) or "为有牺牲多壮志，敢教日月换新天。"
+        if quotes:
+            return random.choice(quotes)
     except Exception:
-        return "为有牺牲多壮志，敢教日月换新天。"
+        pass
+    return "为有牺牲多壮志，敢教日月换新天。"
 
 # ===== 壁纸生成 =====
 def make_wallpaper():
@@ -107,13 +116,11 @@ class TrayApp(QSystemTrayIcon):
         super().__init__()
         self.setToolTip("毛语录壁纸")
 
-        icon_path = os.path.join(BASE_DIR, "tray.ico")
-        if not os.path.exists(icon_path):
-            # 没找到图标，用 Qt 内置图标兜底
+        if not os.path.exists(ICON_PATH):
             from PyQt5.QtWidgets import QApplication
             self.setIcon(QApplication.style().standardIcon(QApplication.style().SP_ComputerIcon))
         else:
-            self.setIcon(QIcon(icon_path))
+            self.setIcon(QIcon(ICON_PATH))
 
         # 菜单（只包含“退出”）
         self.menu = QMenu()
