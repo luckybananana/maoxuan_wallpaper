@@ -1,5 +1,9 @@
 import os, sys, json, random, ctypes, math
-from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtWidgets import (
+    QApplication, QSystemTrayIcon, QMenu, QAction, QDialog, QListWidget,
+    QVBoxLayout, QHBoxLayout, QPushButton, QInputDialog, QFileDialog,
+    QMessageBox
+)
 from PyQt5.QtGui import QIcon, QCursor
 from PIL import Image, ImageDraw, ImageFont
 
@@ -63,14 +67,21 @@ def draw_layered_waves(draw, base_rgb):
         points += [(W, H), (0, H)]
         draw.polygon(points, fill=fill)
 
-def pick_text():
+def load_quotes():
     try:
         with open(QUOTES_PATH, encoding="utf-8") as f:
-            quotes = json.load(f)
-        if quotes:
-            return random.choice(quotes)
+            return json.load(f)
     except Exception:
-        pass
+        return []
+
+def save_quotes(quotes):
+    with open(QUOTES_PATH, "w", encoding="utf-8") as f:
+        json.dump(quotes, f, ensure_ascii=False, indent=2)
+
+def pick_text():
+    quotes = load_quotes()
+    if quotes:
+        return random.choice(quotes)
     return "为有牺牲多壮志，敢教日月换新天。"
 
 # ===== 壁纸生成 =====
@@ -110,6 +121,86 @@ def make_wallpaper():
     img.save(OUT, quality=95)
     ctypes.windll.user32.SystemParametersInfoW(20, 0, OUT, 3)
 
+# ===== 语录管理窗口 =====
+class QuoteManagerDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("语录管理")
+        self.resize(500, 400)
+
+        self.list_widget = QListWidget()
+        self.quotes = load_quotes()
+        self.refresh_list()
+
+        btn_add = QPushButton("新增")
+        btn_edit = QPushButton("修改")
+        btn_delete = QPushButton("删除")
+        btn_import = QPushButton("导入 JSON")
+        btn_export = QPushButton("导出 JSON")
+
+        btn_add.clicked.connect(self.add_quote)
+        btn_edit.clicked.connect(self.edit_quote)
+        btn_delete.clicked.connect(self.delete_quote)
+        btn_import.clicked.connect(self.import_quotes)
+        btn_export.clicked.connect(self.export_quotes)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.list_widget)
+        btns = QHBoxLayout()
+        for b in [btn_add, btn_edit, btn_delete, btn_import, btn_export]:
+            btns.addWidget(b)
+        layout.addLayout(btns)
+        self.setLayout(layout)
+
+    def refresh_list(self):
+        self.list_widget.clear()
+        for q in self.quotes:
+            self.list_widget.addItem(q)
+
+    def add_quote(self):
+        text, ok = QInputDialog.getText(self, "新增语录", "输入语录：")
+        if ok and text:
+            self.quotes.append(text)
+            self.refresh_list()
+            save_quotes(self.quotes)
+
+    def edit_quote(self):
+        row = self.list_widget.currentRow()
+        if row >= 0:
+            old = self.quotes[row]
+            text, ok = QInputDialog.getText(self, "修改语录", "编辑语录：", text=old)
+            if ok and text:
+                self.quotes[row] = text
+                self.refresh_list()
+                save_quotes(self.quotes)
+
+    def delete_quote(self):
+        row = self.list_widget.currentRow()
+        if row >= 0:
+            del self.quotes[row]
+            self.refresh_list()
+            save_quotes(self.quotes)
+
+    def import_quotes(self):
+        path, _ = QFileDialog.getOpenFileName(self, "导入 JSON", "", "JSON Files (*.json)")
+        if path:
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    self.quotes = json.load(f)
+                self.refresh_list()
+                save_quotes(self.quotes)
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"导入失败: {e}")
+
+    def export_quotes(self):
+        path, _ = QFileDialog.getSaveFileName(self, "导出 JSON", "quotes.json", "JSON Files (*.json)")
+        if path:
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(self.quotes, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                QMessageBox.warning(self, "错误", f"导出失败: {e}")
+
 # ===== 托盘逻辑 =====
 class TrayApp(QSystemTrayIcon):
     def __init__(self):
@@ -117,22 +208,32 @@ class TrayApp(QSystemTrayIcon):
         self.setToolTip("毛语录壁纸")
 
         if not os.path.exists(ICON_PATH):
-            from PyQt5.QtWidgets import QApplication
             self.setIcon(QApplication.style().standardIcon(QApplication.style().SP_ComputerIcon))
         else:
             self.setIcon(QIcon(ICON_PATH))
 
-        # 菜单（只包含“退出”）
         self.menu = QMenu()
+        next_action = QAction("下一张", self)
+        manage_action = QAction("管理语录", self)
         quit_action = QAction("退出程序", self)
+
+        next_action.triggered.connect(self.next_wallpaper)
+        manage_action.triggered.connect(self.open_manager)
         quit_action.triggered.connect(self.quit_app)
+
+        self.menu.addAction(next_action)
+        self.menu.addAction(manage_action)
+        self.menu.addSeparator()
         self.menu.addAction(quit_action)
 
-        # 激活事件：左键更换壁纸，右键显示菜单
         self.activated.connect(self.on_activated)
 
     def next_wallpaper(self):
         make_wallpaper()
+
+    def open_manager(self):
+        dlg = QuoteManagerDialog()
+        dlg.exec_()
 
     def on_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:  # 左键
