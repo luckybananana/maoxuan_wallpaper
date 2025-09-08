@@ -19,8 +19,8 @@ def resource_path(relative_path):
 W, H = 2560, 1440
 OUT = os.path.join(os.path.abspath("."), "output.jpg")
 FONT_PATH = resource_path("simhei.ttf")
-DEFAULT_QUOTES_PATH = resource_path("mao_quotes.json")
-ICON_PATH = resource_path("tray.ico")
+DEFAULT_QUOTES_PATH = resource_path("quotes.json")
+ICON_PATH = resource_path("yulu.ico")
 
 # 用户语录文件（存放在用户目录，可读写）
 USER_QUOTES_PATH = os.path.join(os.path.expanduser("~"), "WallpaperApp_quotes.json")
@@ -222,7 +222,7 @@ class QuoteManagerDialog(QDialog):
 class TrayApp(QSystemTrayIcon):
     def __init__(self):
         super().__init__()
-        self.setToolTip("毛语录壁纸")
+        self.setToolTip("语录壁纸")
 
         if not os.path.exists(ICON_PATH):
             self.setIcon(QApplication.style().standardIcon(QApplication.style().SP_ComputerIcon))

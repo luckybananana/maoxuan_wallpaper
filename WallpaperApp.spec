@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('simhei.ttf', '.'), ('mao_quotes.json', '.'), ('tray.ico', '.')],
+    datas=[('simhei.ttf', '.'), ('quotes.json', '.'), ('yulu.ico', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['tray.ico'],
+    icon=['yulu.ico'],
 )
