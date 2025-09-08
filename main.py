@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtGui import QIcon, QCursor
+from PyQt5.QtCore import Qt
 from PIL import Image, ImageDraw, ImageFont
 
 # ===== 工具函数：获取资源路径 =====
@@ -18,8 +19,11 @@ def resource_path(relative_path):
 W, H = 2560, 1440
 OUT = os.path.join(os.path.abspath("."), "output.jpg")
 FONT_PATH = resource_path("simhei.ttf")
-QUOTES_PATH = resource_path("mao_quotes.json")
+DEFAULT_QUOTES_PATH = resource_path("mao_quotes.json")
 ICON_PATH = resource_path("tray.ico")
+
+# 用户语录文件（存放在用户目录，可读写）
+USER_QUOTES_PATH = os.path.join(os.path.expanduser("~"), "WallpaperApp_quotes.json")
 
 # 主色候选
 COLORS = [
@@ -27,6 +31,36 @@ COLORS = [
     "#64B5F6","#4DB6AC","#81C784","#DCE775","#FFD54F",
     "#5488BC","#917C6B","#AA9F7C","#A29296","#515E68"
 ]
+
+# ===== 语录文件操作 =====
+def ensure_user_quotes():
+    """确保用户语录文件存在，不存在则从默认文件复制"""
+    if not os.path.exists(USER_QUOTES_PATH):
+        try:
+            with open(DEFAULT_QUOTES_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = []
+        with open(USER_QUOTES_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_quotes():
+    ensure_user_quotes()
+    try:
+        with open(USER_QUOTES_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_quotes(quotes):
+    with open(USER_QUOTES_PATH, "w", encoding="utf-8") as f:
+        json.dump(quotes, f, ensure_ascii=False, indent=2)
+
+def pick_text():
+    quotes = load_quotes()
+    if quotes:
+        return random.choice(quotes)
+    return "为有牺牲多壮志，敢教日月换新天。"
 
 # ===== 绘制工具函数 =====
 def hex_to_rgb(h):
@@ -50,7 +84,7 @@ def draw_layered_waves(draw, base_rgb):
 
     for i in range(num_layers):
         color = adjust_color(base_rgb, 1 - i*0.06)
-        alpha = min(255, 25 + i*38)   # 顶层更透明，底层更深
+        alpha = min(255, 25 + i*38)
         fill = (*color, alpha)
 
         wavelength = base_wavelength * (1.0 + i*0.03)
@@ -66,23 +100,6 @@ def draw_layered_waves(draw, base_rgb):
 
         points += [(W, H), (0, H)]
         draw.polygon(points, fill=fill)
-
-def load_quotes():
-    try:
-        with open(QUOTES_PATH, encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def save_quotes(quotes):
-    with open(QUOTES_PATH, "w", encoding="utf-8") as f:
-        json.dump(quotes, f, ensure_ascii=False, indent=2)
-
-def pick_text():
-    quotes = load_quotes()
-    if quotes:
-        return random.choice(quotes)
-    return "为有牺牲多壮志，敢教日月换新天。"
 
 # ===== 壁纸生成 =====
 def make_wallpaper():
@@ -228,17 +245,23 @@ class TrayApp(QSystemTrayIcon):
 
         self.activated.connect(self.on_activated)
 
+        self.dlg = None
+
     def next_wallpaper(self):
         make_wallpaper()
 
     def open_manager(self):
-        dlg = QuoteManagerDialog()
-        dlg.exec_()
+        if self.dlg is None:
+            self.dlg = QuoteManagerDialog()
+            self.dlg.setAttribute(Qt.WA_DeleteOnClose, False)
+        self.dlg.show()
+        self.dlg.raise_()
+        self.dlg.activateWindow()
 
     def on_activated(self, reason):
-        if reason == QSystemTrayIcon.Trigger:  # 左键
+        if reason == QSystemTrayIcon.Trigger:
             self.next_wallpaper()
-        elif reason == QSystemTrayIcon.Context:  # 右键
+        elif reason == QSystemTrayIcon.Context:
             cursor_pos = QCursor.pos()
             self.menu.exec_(cursor_pos)
 
@@ -250,7 +273,12 @@ class TrayApp(QSystemTrayIcon):
 if __name__ == "__main__":
     import PyQt5.QtWidgets as QW
     app = QW.QApplication(sys.argv)
+
+    # 🚀 关键修复：关闭窗口不退出程序
+    app.setQuitOnLastWindowClosed(False)
+
     tray = TrayApp()
     tray.show()
     tray.next_wallpaper()
     sys.exit(app.exec_())
+
